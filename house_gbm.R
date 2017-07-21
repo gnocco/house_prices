@@ -20,8 +20,10 @@ to_factors <- c(3,6:17,22:26,28:34,36,40:43,54,56,58,59,61,64:66,73:75,79,80)
 #for(i in to_factors) data[,i] <- data[,i] - 1
 for(i in to_factors) together[,i] <- h2o.asfactor(together[,i])
 
-train_f<-h2o.cbind(together[1:1460,],train[,81])
-test_f<-together[1460:2919,]
+pca<-h2o.prcomp(together, k = 10, impute_missing = TRUE, transform = "NORMALIZE")
+
+train_f<-h2o.cbind(h2o.predict(pca,together[1:1460,]),train[,81])
+test_f<-h2o.predict(pca,together[1460:2919,])
 
 h2o.describe(train_f)    # Describe again to validate the column information
 
