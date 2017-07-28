@@ -20,10 +20,13 @@ to_factors <- c(3,6:17,22:26,28:34,36,40:43,54,56,58,59,61,64:66,73:75,79,80)
 #for(i in to_factors) data[,i] <- data[,i] - 1
 for(i in to_factors) together[,i] <- h2o.asfactor(together[,i])
 
-pca<-h2o.prcomp(together, k = 10, impute_missing = TRUE, transform = "NORMALIZE")
+col_orig<-setdiff(h2o.colnames(together), c("Id"))
 
-train_f<-h2o.cbind(h2o.predict(pca,together[1:1460,]),train[,81])
-test_f<-h2o.predict(pca,together[1460:2919,])
+pca<-h2o.prcomp(together[,col_orig], k = 5, impute_missing = TRUE, transform = "NORMALIZE")
+
+train_f<-h2o.cbind(together[1:1460,col_orig],h2o.predict(pca,together[1:1460,col_orig]),train[,81])
+test_f<-h2o.cbind(together[1461:2919,"Id"],together[1461:2919,col_orig],h2o.predict(pca,together[1461:2919,col_orig]))
+test_f
 
 h2o.describe(train_f)    # Describe again to validate the column information
 
@@ -50,10 +53,10 @@ print(features)
 
 ### Partition the data into training(60%) and test set(40%).
 ### setting a seed will guarantee reproducibility
+#splitted<-h2o.splitFrame(train_f, seed = 1)
+#te<-splitted[[2]]
+#tr<-splitted[[1]]
 
-house_samples <- h2o.splitFrame(train_f, c(0.6), seed=1)
-house_train <- house_samples[[1]]                   
-house_test  <- house_samples[[2]]
 
 ### Now that we have prepared our data, let us train some models.
 ### We will start by training a h2o.glm model
@@ -61,10 +64,13 @@ house_test  <- house_samples[[2]]
 gbm_model1 <- h2o.gbm(x = features,
                       y = target,
                       training_frame = train_f,
+                      #validation_frame = te,
                       model_id = "gbm_model1",
-                      nfolds = 5,
+                      nfolds = 10,
+                      ntrees = 300,
+                      max_depth = 10,
                       keep_cross_validation_predictions = TRUE,
-                      distribution = "gaussian")
+                      distribution = "poisson")
 
 ###Evaluate the model summary   
 
@@ -75,5 +81,6 @@ print(summary(gbm_model1))
 #perf_obj <- h2o.performance(gbm_model1, newdata = house_test)
 #h2o.accuracy(perf_obj, 0.949411607730009)
 
-pred_creditability <- h2o.predict(gbm_model1,test_f)
+pred_creditability <- h2o.cbind(test_f[,"Id"],h2o.predict(gbm_model1,test_f[,features]))
+h2o.exportFile(pred_creditability,"C:/Users/asu/Downloads/prediction.csv")
 pred_creditability
