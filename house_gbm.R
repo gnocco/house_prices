@@ -66,11 +66,13 @@ gbm_model1 <- h2o.gbm(x = features,
                       training_frame = train_f,
                       #validation_frame = te,
                       model_id = "gbm_model1",
-                      nfolds = 10,
-                      ntrees = 300,
-                      max_depth = 10,
+                      nfolds = 5,
+                      ntrees = 500,
+                      max_depth = 5,
                       keep_cross_validation_predictions = TRUE,
-                      distribution = "poisson")
+                      distribution = "gaussian")
+
+
 
 ###Evaluate the model summary   
 
