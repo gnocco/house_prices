@@ -52,7 +52,7 @@ print(target)
 print(features)
 
 ## Construct a large Cartesian hyper-parameter space
-ntrees_opts <- c(10000) ## early stopping will stop earlier
+ntrees_opts <- c(100,1000,10000) ## early stopping will stop earlier
 max_depth_opts <- seq(1,20)
 min_rows_opts <- c(1,5,10,20,50,100)
 learn_rate_opts <- seq(0.001,0.01,0.001)
