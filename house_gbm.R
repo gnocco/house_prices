@@ -51,38 +51,66 @@ features <- setdiff(h2o.colnames(train_f), c(target))
 print(target)
 print(features)
 
-### Partition the data into training(60%) and test set(40%).
-### setting a seed will guarantee reproducibility
-#splitted<-h2o.splitFrame(train_f, seed = 1)
-#te<-splitted[[2]]
-#tr<-splitted[[1]]
+## Construct a large Cartesian hyper-parameter space
+ntrees_opts <- c(10000) ## early stopping will stop earlier
+max_depth_opts <- seq(1,20)
+min_rows_opts <- c(1,5,10,20,50,100)
+learn_rate_opts <- seq(0.001,0.01,0.001)
+sample_rate_opts <- seq(0.3,1,0.05)
+col_sample_rate_opts <- seq(0.3,1,0.05)
+col_sample_rate_per_tree_opts = seq(0.3,1,0.05)
+#nbins_cats_opts = seq(100,10000,100) ## no categorical features in this dataset
+
+hyper_params = list( ntrees = ntrees_opts,
+                     max_depth = max_depth_opts,
+                     min_rows = min_rows_opts,
+                     learn_rate = learn_rate_opts,
+                     sample_rate = sample_rate_opts,
+                     col_sample_rate = col_sample_rate_opts,
+                     col_sample_rate_per_tree = col_sample_rate_per_tree_opts
+                     #,nbins_cats = nbins_cats_opts
+)
 
 
-### Now that we have prepared our data, let us train some models.
-### We will start by training a h2o.glm model
+## Search a random subset of these hyper-parmameters (max runtime and max models are enforced, and the search will stop after we don't improve much over the best 5 random models)
+search_criteria = list(strategy = "RandomDiscrete", max_runtime_secs = 600, max_models = 100, stopping_metric = "AUTO", stopping_tolerance = 0.00001, stopping_rounds = 5, seed = 123456)
 
-gbm_model1 <- h2o.gbm(x = features,
-                      y = target,
-                      training_frame = train_f,
-                      #validation_frame = te,
-                      model_id = "gbm_model1",
-                      nfolds = 5,
-                      ntrees = 500,
-                      max_depth = 5,
-                      keep_cross_validation_predictions = TRUE,
-                      distribution = "gaussian")
+gbm.grid <- h2o.grid("gbm",
+                     grid_id = "mygrid",
+                     x = features,
+                     y = target,
+                     
+                     # faster to use a 80/20 split
+                     #training_frame = trainSplit,
+                     #validation_frame = validSplit,
+                     #nfolds = 0,
+                     
+                     # alternatively, use N-fold cross-validation
+                     training_frame = train_f,
+                     nfolds = 5,
+                     
+                     distribution="gaussian", ## best for MSE loss, but can try other distributions ("laplace", "quantile")
+                     
+                     ## stop as soon as mse doesn't improve by more than 0.1% on the validation set,
+                     ## for 2 consecutive scoring events
+                     stopping_rounds = 2,
+                     stopping_tolerance = 1e-3,
+                     stopping_metric = "MSE",
+                     
+                     score_tree_interval = 100, ## how often to score (affects early stopping)
+                     seed = 123456, ## seed to control the sampling of the Cartesian hyper-parameter space
+                     hyper_params = hyper_params,
+                     search_criteria = search_criteria)
+
+gbm.sorted.grid <- h2o.getGrid(grid_id = "mygrid", sort_by = "mse")
+print(gbm.sorted.grid)
+
+best_model <- h2o.getModel(gbm.sorted.grid@model_ids[[1]])
+summary(best_model)
 
 
 
-###Evaluate the model summary   
 
-print(summary(gbm_model1))
-
-###Evaluate model performance on test data
-
-#perf_obj <- h2o.performance(gbm_model1, newdata = house_test)
-#h2o.accuracy(perf_obj, 0.949411607730009)
-
-pred_creditability <- h2o.cbind(test_f[,"Id"],h2o.predict(gbm_model1,test_f[,features]))
+pred_creditability <- h2o.cbind(test_f[,"Id"],h2o.predict(best_model,test_f[,features]))
 h2o.exportFile(pred_creditability,"C:/Users/asu/Downloads/prediction.csv")
 pred_creditability
